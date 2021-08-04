@@ -1,28 +1,44 @@
-import { Box, Spinner, Flex, Heading, Text, Button, Icon, Table, Thead, Tr, Th, Checkbox, Tbody, Td, useBreakpointValue } from "@chakra-ui/react";
-import Link from "next/link";
-import { useEffect } from "react";
+import { Box, Spinner, Flex, Heading, Text, Button, Icon, Table, Thead, Tr, Th, Checkbox, Tbody, Td, useBreakpointValue,Link } from "@chakra-ui/react";
+import { GetServerSideProps } from "next";
+import NextLink from "next/link";
+import { useState } from "react";
 import { RiAddLine, RiPencilLine } from "react-icons/ri";
-import { useQuery } from 'react-query';
 
 
 import { Header } from '../../components/Header';
 import { Pagination } from "../../components/Pagination";
 import { Sidebar } from "../../components/Sidebar";
+import { api } from "../../services/api";
+import { getUsers, useUsers } from "../../services/hooks/useUsers";
+import { queryClient } from "../../services/queryClient";
 
-export default function UserList() {
+export default function UserList({/*users*/}) {
 
-    const { data, isLoading, error } = useQuery('users', async () => {
-        const response = await fetch('http://localhost:3000/api/users')
-        const data = await response.json()
+    const [page, setPage] = useState(1);
 
-        return data;
-    })
+    const { data, isLoading, error, isFetching } = useUsers(page)
+
+
+    /* SERVER SIDE RENDERING 
+    const { data, isLoading, error, isFetching } = useUsers(page,{
+        initialData:users,
+    });*/
 
     const isWideVersion = useBreakpointValue({
         base: false,
         lg: true,
     });
-    
+
+    async function handlePrefetchUser(userId:string){
+        await queryClient.prefetchQuery(['user',userId], async () => {
+            const response = await api.get(`users/${userId}`);
+
+            return response.data;
+        },{
+            staleTime:1000*60*10, //10 minutes
+        })
+    }
+
     return (
         <Box>
             <Header />
@@ -31,15 +47,17 @@ export default function UserList() {
 
                 <Box flex="1" borderRadius={8} bg="gray.800" p="8">
                     <Flex mb="8" justify="space-between" align="center">
-                        <Heading size="lg" fontWeight="normal">Usuários</Heading>
+                        <Heading size="lg" fontWeight="normal">Usuários
+                            {!isLoading && isFetching && <Spinner size="sm" color="gray.500" ml="4" />}
+                        </Heading>
 
-                        <Link href="/users/create" passHref>
+                        <NextLink href="/users/create" passHref>
                             <Button as="a"
                                 size="sm"
                                 fontSize="sm"
                                 colorScheme="pink"
                                 leftIcon={<Icon as={RiAddLine} fontSize="20" />}>Criar Novo</Button>
-                        </Link>
+                        </NextLink>
                     </Flex>
                     {isLoading ? (
                         <Flex justify="center">
@@ -69,7 +87,9 @@ export default function UserList() {
                                                 </Td>
                                                 <Td>
                                                     <Box>
-                                                        <Text fontWeight="bold">{user.name}</Text>
+                                                        <Link color="purple.400" onMouseEnter={() => handlePrefetchUser(user.id)}>
+                                                            <Text fontWeight="bold">{user.name}</Text>
+                                                        </Link>
                                                         <Text fontSize="sm" color="gray.300">{user.email}</Text>
                                                     </Box>
                                                 </Td>
@@ -84,7 +104,10 @@ export default function UserList() {
                                     })}
                                 </Tbody>
                             </Table>
-                            <Pagination />
+                            <Pagination
+                                totalCountOfRegisters={data.totalCount}
+                                currentPage={page}
+                                onPageChange={setPage} />
                         </>
                     )}
                 </Box>
@@ -92,3 +115,13 @@ export default function UserList() {
         </Box>
     );
 }
+
+/*export const getServerSideProps: GetServerSideProps = async () => {
+    const {users,totalCount} = await getUsers(1)
+
+    return{
+        props:{
+            users,
+        }
+    }
+}*/
